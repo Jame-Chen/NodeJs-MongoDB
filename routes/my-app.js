@@ -333,17 +333,49 @@ router.get('/down/:collection', function (req, res) {
                         return readstream.pipe(res);
                     }
                     var filename = files[0].filename;
+                    var file=file[0];
                     // create read stream 
-                    var readstream = gfs.createReadStream({
-                        _id: id,
-                        root: collection
-                    });
-                    // set the proper content type 
-                    res.set({
-                        'Content-Type': files[0].contentType,
-                        'Content-Disposition': 'inline; filename=' + encodeURI(filename)
-                    });
-                    return readstream.pipe(res);
+                    if (req.headers['range']) {
+                        let parts = req.headers['range'].replace(/bytes=/, "").split("-")
+                        let partialstart = parts[0]
+                        let partialend = parts[1]
+        
+                        let start = parseInt(partialstart, 10)
+        
+                        //let endsize = ((start + file.chunkSize) - 1) >= file.length ? file.length : ((start + file.chunkSize) - 1)
+        
+                        let end = partialend ? parseInt(partialend, 10) :( file.length-1)
+        
+                        let chunksize = (end - start) + 1
+        
+        
+                        res.writeHead(206, {
+                            'Accept-Ranges': 'bytes',
+                            'Content-Length': chunksize,
+                            'Content-Range': 'bytes ' + start + '-' + end + '/' + file.length,
+                            'Content-Type': file.contentType
+                        })
+        
+                        gfs.createReadStream({
+                            _id: id,
+                            root: collection,
+                            range: {
+                                startPos: start,
+                                endPos: end
+                            }
+                        }).pipe(res)
+                    } else {
+        
+                        res.writeHead(200, {
+                            'Content-Length': file.length,
+                            'Content-Type':  file.contentType,
+                            'Accept-Ranges': 'bytes'
+                          })
+                        gfs.createReadStream({
+                            _id: id,
+                            root: collection
+                        }).pipe(res)
+                    }
                 });
             }
 
